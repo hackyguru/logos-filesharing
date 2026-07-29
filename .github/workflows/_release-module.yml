@@ -1,0 +1,48 @@
+name: _release-module
+
+# Local reusable workflow — the single place that owns this repo's signing
+# configuration. Every per-module workflow and the umbrella delegate here,
+# so switching signing modes means editing THIS file, never the callers.
+#
+# The leading underscore marks it "private": it has only `workflow_call`,
+# so it never appears as a runnable item in the Actions UI.
+#
+# ── Why this repo publishes its own .lgx ─────────────────────────────
+# It holds several modules in subdirectories. The catalog at
+# hackyguru/logos-modules builds one module per git submodule ROOT and
+# cannot descend into a subdirectory, so this repo builds and signs its
+# own packages and the catalog indexes the release assets by URL (see
+# external-modules.txt over there).
+#
+# ── Signing ──────────────────────────────────────────────────────────
+# `signing_mode: inline` runs `lgx sign` with the LOGOS_SIGNING_KEY secret
+# (Ed25519 JWK). It MUST be the key whose public DID is listed under
+# `trustedSigners` in the catalog's logos-repo.json, or Basecamp will
+# treat these packages as untrusted.
+
+on:
+  workflow_call:
+    inputs:
+      module_path:
+        description: "Subdirectory holding the module."
+        type: string
+        required: true
+      force_build:
+        description: |
+          Force build — rebuild and REPLACE the already-published
+          `<module>-v<version>` release instead of skipping it.
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    uses: logos-co/logos-modules-release-action/.github/workflows/release.yml@v1
+    with:
+      module_path: ${{ inputs.module_path }}
+      skip_if_published: ${{ !inputs.force_build }}
+      signing_mode: inline
+    secrets:
+      signing_key: ${{ secrets.LOGOS_SIGNING_KEY }}

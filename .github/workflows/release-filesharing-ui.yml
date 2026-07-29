@@ -1,0 +1,30 @@
+name: Release filesharing-ui
+
+# Manually-triggered release for the module in filesharing-ui/. Delegates to
+# _release-module.yml so the signing config lives in exactly one place.
+#
+# Source of truth for name + version is filesharing-ui/metadata.json — bump
+# `version` there and re-run. An already-published version is skipped
+# unless you tick "Force build".
+#
+# Builds darwin-arm64 + linux-amd64 + linux-arm64 and merges them into a
+# single multi-platform .lgx.
+
+on:
+  workflow_dispatch:
+    inputs:
+      force_build:
+        description: "Force build — replace the current published release if it has the same version."
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    uses: ./.github/workflows/_release-module.yml
+    with:
+      module_path: filesharing-ui
+      force_build: ${{ inputs.force_build }}
+    secrets: inherit

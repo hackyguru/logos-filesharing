@@ -1,0 +1,32 @@
+name: Release all modules
+
+# Umbrella release: builds and publishes every module in this repo.
+# Handy after a version bump touching more than one; otherwise run the
+# individual "Release <dir>" workflows.
+#
+# Each leg is independent (`fail-fast: false`) so one broken module can't
+# block the others. Already-published versions are skipped unless
+# "Force build" is ticked.
+
+on:
+  workflow_dispatch:
+    inputs:
+      force_build:
+        description: "Force build — replace current published releases that have the same version."
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        module_path: [filesharing-core, filesharing-ui]
+    uses: ./.github/workflows/_release-module.yml
+    with:
+      module_path: ${{ matrix.module_path }}
+      force_build: ${{ inputs.force_build }}
+    secrets: inherit

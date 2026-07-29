@@ -1,0 +1,88 @@
+name: Update flake locks
+
+# Regenerates each module's flake.lock against current upstream and commits
+# the result.
+#
+# Why this exists: the locks inherited from logos-workshop pin
+# logos-delivery-module (and transitively nixpkgs) to early-2026 revisions.
+# That nixpkgs predates the fetchCargoVendor fix of 2026-06-22, which added
+# a User-Agent and moved crate downloads to static.crates.io — without it,
+# crates.io answers 403 and the zerokit vendor step fails, taking the whole
+# delivery_module → filesharing build down with it.
+#
+# Re-locking has to happen on a machine with nix, hence a workflow rather
+# than a local script. Run it, review the committed lock diff, then run
+# "Release all modules".
+
+on:
+  workflow_dispatch:
+    inputs:
+      modules:
+        description: "Space-separated module directories to re-lock."
+        type: string
+        default: "filesharing-core filesharing-ui"
+
+permissions:
+  contents: write
+
+jobs:
+  relock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: DeterminateSystems/nix-installer-action@ef8a148080ab6020fd15196c2084a2eea5ff2d25 # v22
+        with:
+          extra-conf: |
+            experimental-features = nix-command flakes
+
+      - name: nix flake update
+        shell: bash
+        run: |
+          set -euo pipefail
+          for d in ${{ inputs.modules }}; do
+            echo "::group::$d"
+            ( cd "$d" && nix flake update )
+            echo "::endgroup::"
+          done
+
+      # Report what moved, so the run's log is a readable audit trail even
+      # before anyone looks at the commit.
+      - name: Summarise input moves
+        shell: bash
+        run: |
+          set -euo pipefail
+          for d in ${{ inputs.modules }}; do
+            echo "### $d" >> "$GITHUB_STEP_SUMMARY"
+            python3 - "$d/flake.lock" >> "$GITHUB_STEP_SUMMARY" <<'PY'
+          import json, sys, datetime
+          nodes = json.load(open(sys.argv[1]))["nodes"]
+          seen = set()
+          for name, n in sorted(nodes.items()):
+              loc = n.get("locked") or {}
+              if loc.get("repo") in ("nixpkgs", "zerokit") or "delivery" in name:
+                  key = (loc.get("owner"), loc.get("repo"), loc.get("rev"))
+                  if key in seen: continue
+                  seen.add(key)
+                  ts = loc.get("lastModified")
+                  when = datetime.datetime.utcfromtimestamp(ts).date().isoformat() if ts else "?"
+                  print(f"- `{name}` {loc.get('owner','')}/{loc.get('repo','')} @ `{str(loc.get('rev',''))[:12]}` ({when})")
+          PY
+          done
+
+      - name: Commit updated locks
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- '*/flake.lock'; then
+            echo "::notice::no lock changes"
+            exit 0
+          fi
+          git add ./*/flake.lock
+          git commit -m "Update flake locks to current upstream
+
+          Picks up the fetchCargoVendor User-Agent / static.crates.io fix so the
+          zerokit vendor step stops getting 403s from crates.io."
+          git push
