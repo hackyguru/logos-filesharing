@@ -7,12 +7,12 @@
   # headers can be introspected — so we list it here, and include
   # `logos_sdk.h` from filesharing_plugin.h at compile time to use the
   # wrapper. The storage_module `.lgx` binary itself is installed into
-  # Basecamp separately (see Part 4 README) — we only need it for the
+  # Basecamp separately (see the README) — we only need it for the
   # client-side wrapper generation here.
   #
   # KNOWN ISSUE (macOS, 2026-04-24)
   # -------------------------------
-  # Part 4 cannot complete an end-to-end upload/download on macOS Basecamp
+  # This module cannot complete an end-to-end upload/download on macOS Basecamp
   # due to upstream bugs in the storage_module ↔ logos_host boundary:
   #
   #   1. storage_module.init() uses QEventLoop::waitForSignal with a 1 s
@@ -36,7 +36,7 @@
   #      event-driven completion detection.
   #
   # All three are upstream bugs (logos-basecamp / logos-storage-module),
-  # not workshop code. On Linux Basecamp builds, the same code is reported
+  # not code in this repo. On Linux Basecamp builds, the same code is reported
   # to work end-to-end (see xAlisher/stash-basecamp and
   # vpavlin/logos-yolo — both were tested on Linux).
   #

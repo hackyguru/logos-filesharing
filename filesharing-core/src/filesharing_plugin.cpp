@@ -10,7 +10,7 @@
 #include <QTimer>
 #include <QUrl>
 
-// Part 4 implementation notes — the takeaways from integrating storage_module
+// Implementation notes — the takeaways from integrating storage_module
 // on Basecamp, distilled from vpavlin/logos-yolo's `docs/inter-module-comm.md`:
 //
 // 1. Vendor `storage_module_api.{h,cpp}` (under `vendor/`) instead of taking
@@ -65,9 +65,9 @@ QString defaultStorageConfig()
     cfg["log-level"] = "INFO";
     cfg["log-file"]  = dataRoot + "/storage.log";
 
-    // Join the same network as the part12 seeder so its CIDs are discoverable.
+    // Join the same network as the seed-storage seeder so its CIDs are discoverable.
     // Without bootstrap nodes the storage node is isolated (no peers) and can't
-    // resolve remote CIDs. These SPRs mirror part12-seed-storage/seeder/config.json.
+    // resolve remote CIDs. These SPRs mirror the seeder's config.json.
     // Ports differ from the seeder's (8081/8091) so both can run on one machine.
     QJsonArray bootstrap;
     bootstrap.append(QStringLiteral("spr:CiUIAhIhAlPbmW9J08tDI6pIV-C-XvvFTCDN_Vih8I3ZTOeOuf5rEgIDARo8CicAJQgCEiECU9uZb0nTy0MjqkhX4L5e-8VMIM39WKHwjdlM5465_msQ9tr10QYaCwoJBKX1-QWRAh-aKkcwRQIhAN5zU6DDxSpzqvbFa_iuliroxBx7m86wOO9C1AcKOBqRAiAW3yEXyXtSgXXWzarU_j7E0Ad6HsVAOEvdrpX9FB-i7g"));

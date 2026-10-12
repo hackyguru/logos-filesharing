@@ -186,9 +186,9 @@ Item {
         storageStatus = 1
         lastError = ""
 
-        // Join the same network as the part12 seeder so its CIDs resolve.
+        // Join the same network as the seed-storage seeder so its CIDs resolve.
         // Without bootstrap nodes the storage node is isolated (no peers) and
-        // remote CIDs never download. SPRs mirror part12 seeder/config.json;
+        // remote CIDs never download. SPRs mirror the seeder's config.json;
         // ports differ from the seeder's (8081/8091) so both run on one machine.
         const cfg = JSON.stringify({
             "log-level": "INFO",
