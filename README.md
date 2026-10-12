@@ -1,4 +1,10 @@
+<div align="center">
+
+<img src="filesharing-ui/icons/filesharing.png" alt="Logos File Sharing logo" width="128" height="128">
+
 # Logos File Sharing
+
+</div>
 
 Upload, download and remove files over Logos Storage (`logos-storage-module`) from [Logos Basecamp](https://logos.co). Uploads return a CID, and anyone on the same storage network can fetch the file by that CID.
 
