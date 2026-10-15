@@ -90,10 +90,10 @@ Item {
         while (v >= 1024 && i < units.length - 1) { v /= 1024; i++ }
         return v.toFixed(v < 10 && i > 0 ? 1 : 0) + " " + units[i]
     }
-    function normaliseUrl(p) {
+    // storage_module 3.x takes plain absolute paths, not file:// URLs.
+    function toPath(p) {
         if (!p) return ""
-        if (p.indexOf("file://") === 0) return p
-        if (p.charAt(0) === "/") return "file://" + p
+        if (p.indexOf("file://") === 0) return decodeURIComponent(p.substring(7))
         return p
     }
 
@@ -129,51 +129,74 @@ Item {
         logos.onModuleEvent("storage_module", "storageDownloadDone")
     }
 
-    function handleStorageEvent(eventName, data) {
-        // `data` is a QVariantList. Empirically the bridge sometimes hands it
-        // through as a JSON-encoded string; unwrap once defensively.
+    // storage_module 3.x sends each event as one JSON object, e.g.
+    //   storageUploadDone   {"success":true,"sessionId":"0","cid":"zDv…"}
+    //   storageUploadProgress {"success":true,"sessionId":"0","bytes":…,"total":…}
+    // Older builds sent positional lists: [success, sessionId, cidOrError].
+    // Normalise both into { success, cid, error, bytes, total }.
+    function eventPayload(data) {
         if (typeof data === "string") {
-            try { data = JSON.parse(data) } catch (e) { /* keep as string */ }
+            try { data = JSON.parse(data) } catch (e) { return { success: false, error: data } }
         }
+        // The bridge's QVariantList is list-like but not always a JS Array.
+        if (data && data.length === 1 && typeof data[0] === "string") {
+            try { data = JSON.parse(data[0]) } catch (e) { /* keep list */ }
+        }
+        if (data && typeof data === "object" && data.length === undefined) {
+            return {
+                success: data.success === true || data.success === "true",
+                cid: data.cid || "",
+                error: data.error || data.message || "",
+                bytes: Number(data.bytes || 0),
+                total: Number(data.total || 0)
+            }
+        }
+        const list = data || []
+        return {
+            success: list[0] === true || list[0] === "true",
+            cid: list[2] || list[1] || "",
+            error: list[2] || list[1] || "",
+            bytes: Number(list[2] || 0),
+            total: 0
+        }
+    }
+
+    function handleStorageEvent(eventName, data) {
+        const e = eventPayload(data)
         if (eventName === "storageStart") {
-            const ok = data && (data[0] === true || data[0] === "true")
-            if (ok) { storageStatus = 2; lastError = "" }
-            else    { storageStatus = 3; lastError = (data && data[1]) || "storage failed to start" }
+            if (e.success) { storageStatus = 2; lastError = "" }
+            else           { storageStatus = 3; lastError = e.error || "storage failed to start" }
         } else if (eventName === "storageStop") {
             storageStatus = 0
         } else if (eventName === "storageUploadProgress") {
-            if (!data || lastUpload.status !== 1) return
-            const inc = (typeof data[2] === "number") ? data[2] : parseInt(data[2] || "0", 10)
+            if (lastUpload.status !== 1) return
             const upd = lastUpload
-            upd.bytes += inc
+            upd.bytes = e.total ? Math.min(e.bytes, e.total) : upd.bytes + e.bytes
             lastUpload = upd
         } else if (eventName === "storageUploadDone") {
-            const upd = lastUpload
             if (lastUpload.status !== 1) return
-            // Payload shape (from storage_module): [success: bool, sessionId, cidOrError]
-            if (data && data[0] === true) {
-                upd.cid = data[2] || data[1] || ""
-                upd.status = upd.cid ? 2 : 3
-                if (!upd.cid) upd.error = "no CID in storageUploadDone payload"
-            } else if (data) {
-                upd.error = data[2] || data[1] || "upload failed"
+            const upd = lastUpload
+            if (e.success && e.cid) {
+                upd.cid = e.cid
+                upd.status = 2
+            } else {
+                upd.error = e.error || "upload failed"
                 upd.status = 3
             }
             lastUpload = upd
         } else if (eventName === "storageDownloadProgress") {
-            if (!data || lastDownload.status !== 1) return
-            const inc = (typeof data[2] === "number") ? data[2] : parseInt(data[2] || "0", 10)
+            if (lastDownload.status !== 1) return
             const upd = lastDownload
-            upd.bytes += inc
+            upd.bytes = e.total ? Math.min(e.bytes, e.total) : upd.bytes + e.bytes
             lastDownload = upd
         } else if (eventName === "storageDownloadDone") {
-            const upd = lastDownload
             if (lastDownload.status !== 1) return
-            if (data && data[0] === false) {
-                upd.error = data[2] || data[1] || "download failed"
-                upd.status = 3
-            } else {
+            const upd = lastDownload
+            if (e.success) {
                 upd.status = 2
+            } else {
+                upd.error = e.error || "download failed"
+                upd.status = 3
             }
             lastDownload = upd
         }
@@ -223,6 +246,13 @@ Item {
             })
         }
 
+        // Basecamp 0.3 starts its bundled storage node at launch. If it is
+        // already running, just use it.
+        if (interpretBoolResult(callSmSync("isRunning"))) {
+            storageStatus = 2
+            return
+        }
+
         // Skip init on subsequent Starts within the same Basecamp run —
         // storage_module's init is once-per-process. start() can be called
         // any number of times.
@@ -231,15 +261,9 @@ Item {
             return
         }
 
+        // init() is once per process; if Basecamp already did it, it reports
+        // "already initialised" (false) and start() still works.
         callSm("init", [cfg], function(initRaw) {
-            const initOk = interpretBoolResult(initRaw)
-            if (!initOk) {
-                storageStatus = 3
-                lastError = "Storage init failed. Try quitting Basecamp, " +
-                            "deleting ~/Library/Application Support/Storage, " +
-                            "and starting again."
-                return
-            }
             initDone = true
             callStartAfterInit()
         })
@@ -252,11 +276,12 @@ Item {
 
     function uploadFile(path) {
         if (storageStatus !== 2) return
-        const url = normaliseUrl(path)
-        if (!url) return
-        const filename = url.split("/").pop()
+        const filePath = toPath(path)
+        if (!filePath) return
+        const filename = filePath.split("/").pop()
         lastUpload = { filename: filename, cid: "", bytes: 0, status: 1, error: "" }
-        callSm("uploadUrl", [url], function(_r) {
+        // uploadUrl(filePath, chunkSize, advertise): advertise so peers can fetch it
+        callSm("uploadUrl", [filePath, 65536, true], function(_r) {
             // sessionId is in r if we wanted it; the CID arrives via the
             // storageUploadDone event handler above.
         })
@@ -265,10 +290,10 @@ Item {
     function downloadFile(cid, dest) {
         if (storageStatus !== 2) return
         if (!cid || !dest) return
-        const destUrl = normaliseUrl(dest)
-        lastDownload = { destPath: destUrl, cid: cid, bytes: 0, status: 1, error: "" }
-        // Signature: downloadToUrl(cid, url, force)
-        callSm("downloadToUrl", [cid, destUrl, false], function(_r) {})
+        const destPath = toPath(dest)
+        lastDownload = { destPath: destPath, cid: cid, bytes: 0, status: 1, error: "" }
+        // downloadToUrl(cid, filePath, local, chunkSize, isPrivate, advertise)
+        callSm("downloadToUrl", [cid, destPath, false, 65536, false, true], function(_r) {})
     }
 
 

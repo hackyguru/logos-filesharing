@@ -8,12 +8,12 @@
 
 Upload, download and remove files over Logos Storage (`logos-storage-module`) from [Logos Basecamp](https://logos.co). Uploads return a CID, and anyone on the same storage network can fetch the file by that CID.
 
-> [!WARNING]
-> **Work in progress.** The module builds and installs, but end-to-end upload/download doesn't work on macOS Basecamp yet because of upstream bugs at the `storage_module` ↔ `logos_host` boundary. The comment block in [`filesharing-core/flake.nix`](filesharing-core/flake.nix) has the details. The same code is reported to work on Linux.
+> [!NOTE]
+> Works on Basecamp 0.3, which bundles `storage_module` and starts its storage node at launch. `filesharing-ui` uses that node directly; tested end to end (upload → CID → download) on macOS Basecamp 0.3.2.
 
 ## Quick start
 
-Download `filesharing-core` and `filesharing-ui` `.lgx` files from [Releases](https://github.com/hackyguru/logos-filesharing/releases). `storage_module` must be installed first (see [Install](#install)). To build them yourself, read on.
+Download `filesharing-core` and `filesharing-ui` `.lgx` files from [Releases](https://github.com/hackyguru/logos-filesharing/releases). `filesharing-ui` talks to `storage_module` directly, and Basecamp 0.3 ships it, so `filesharing-ui` is all you need. To build it yourself, read on.
 
 ## Prerequisites
 
@@ -42,12 +42,4 @@ The first build pulls `logos-storage-module` (libstorage, Nim), which takes a wh
 
 ## Install
 
-`storage_module` is **not** pre-installed in Basecamp, so install it once first:
-
-```bash
-nix build github:logos-co/logos-storage-module --out-link /tmp/storage
-cp /tmp/storage/lib/* "$HOME/Library/Application Support/Logos/LogosBasecamp/modules/"
-# Linux: "$HOME/.local/share/Logos/LogosBasecamp/modules/"
-```
-
-Restart Basecamp, then install `filesharing-core` and then `filesharing-ui` (`result-portable/*.lgx`) through **Modules → Install LGX Package**.
+Basecamp 0.3 bundles `storage_module`, so there's nothing to set up first. Install `filesharing-ui` (`result-portable/*.lgx`) through **Package Manager → Install Local Package**.
